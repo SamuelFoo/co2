@@ -1,3 +1,6 @@
+import re
+from pathlib import Path
+
 import requests
 from google.auth import default
 from google.auth.transport.requests import Request
@@ -32,5 +35,18 @@ def get_data_file_metadata(bucket):
     return fetch_gcs_object(url).json()
 
 
-def get_data_file(file_url):
-    data = fetch_gcs_object(file_url)
+def get_all_data_files(save_dir: Path, bucket):
+    save_dir.mkdir(parents=True, exist_ok=True)
+
+    pi3_metadata = get_data_file_metadata(bucket)
+    file_urls = list(map(lambda x: x["mediaLink"], pi3_metadata["items"]))
+
+    for file_url in file_urls:
+        response = fetch_gcs_object(file_url)
+
+        pattern = r"\/([^\/]+%20[^\/]+\.csv)"
+        match = re.search(pattern, file_url)
+        file_name = match.group(1).replace(":", "_").replace("%20", " ")
+
+        with open(save_dir / file_name, "w") as f:
+            f.write(response.text.replace("\n", ""))
