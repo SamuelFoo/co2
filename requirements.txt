@@ -1,0 +1,7 @@
+numpy
+geopandas
+matplotlib
+PyQt6
+opencv-contrib-python
+requests
+google-auth
