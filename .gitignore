@@ -1,6 +1,11 @@
 __pycache__
-gis
-data
+
+data/raw/**
+
+gis/RoadSectionLine_Jul2024/processed/**
+gis/CoveredLinkWay_Jul2024
+gis/Footpath_Jul2024
+gis/Traffic_Count_Data
 
 # Python file to sort imports
 sort_imports.py
