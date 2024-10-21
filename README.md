@@ -11,3 +11,9 @@ Or
 ```
 pip install -r requirements.txt
 ```
+
+## Export Anaconda environment
+
+```
+conda env export --no-builds --file environment.yml
+```
