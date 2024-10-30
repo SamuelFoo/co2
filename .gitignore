@@ -1,6 +1,6 @@
 __pycache__
 
-data/raw/**
+data/co2_readings/raw/**
 
 gis/RoadSectionLine_Jul2024/processed/**
 gis/CoveredLinkWay_Jul2024
