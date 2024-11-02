@@ -11,3 +11,5 @@ contextily
 matplotlib-scalebar
 filterpy
 pymc==5.0.0
+scikit-learn
+cairosvg

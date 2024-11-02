@@ -1,13 +1,15 @@
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
 import contextily as cx
 import geopandas as gpd
 import matplotlib.pyplot as plt
+import numpy as np
 from geopandas.geodataframe import GeoDataFrame
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib_scalebar.scalebar import ScaleBar
+from shapely.geometry import box
 
 
 def get_co2_axes(ax: Axes) -> Axes:
@@ -38,6 +40,11 @@ class COMP_DOMAIN:
     max_lon = points_gdf["Longitude"].max() + padding_metres / LAT_TO_METRES
 
 
+class VIS_DOMAIN:
+    min_lon, max_lon = 103.76, 103.775
+    min_lat, max_lat = 1.303, 1.3225
+
+
 def get_map_axes(ax: Axes) -> Axes:
     ax.set_aspect("equal")
     ax.set_axis_off()
@@ -45,7 +52,7 @@ def get_map_axes(ax: Axes) -> Axes:
     return ax
 
 
-def export_fig(fig: Figure, path: Path):
+def export_fig(fig: Figure, path: Path) -> None:
     fig.savefig(
         path.with_suffix(".svg"), bbox_inches="tight", pad_inches=None, transparent=True
     )
@@ -66,4 +73,56 @@ def plot_with_scale(
     ax.set_xlim(ax.set_xlim()[::-1])
     ax.set_ylim(ax.get_ylim()[::-1])
     ax = get_map_axes(ax)
+    return ax
+
+
+def get_vis_base_plot() -> Tuple[Figure, Axes]:
+    gdf: GeoDataFrame = gpd.read_file(
+        Path("gis/RoadSectionLine_Jul2024/RoadSectionLine.shp")
+    )
+    points_gdf: GeoDataFrame = gpd.read_file(Path("data/locations/locations.shp"))
+    bbox = box(
+        VIS_DOMAIN.min_lon, VIS_DOMAIN.min_lat, VIS_DOMAIN.max_lon, VIS_DOMAIN.max_lat
+    )
+    bbox_gdf = gpd.GeoDataFrame([[1]], geometry=[bbox], crs="EPSG:4326")
+    transformed_gdf = gdf.to_crs(crs="EPSG:4326")
+    cropped_gdf = gpd.overlay(
+        transformed_gdf, bbox_gdf, how="intersection", keep_geom_type=False
+    )
+
+    fig, ax = plt.subplots()
+    ax = plot_with_scale(
+        ax, [points_gdf, cropped_gdf], [{"color": "red", "zorder": 3}, {"zorder": -1}]
+    )
+    return fig, ax
+
+
+def plot_route(
+    points_gdf: GeoDataFrame,
+    ax: Axes,
+    point_size: float = 30,
+    color: str = "C0",
+    label=None,
+) -> Axes:
+    """Plot paths or arrows between points"""
+    for i in range(len(points_gdf) - 1):
+        start_point = points_gdf.iloc[i].geometry
+        end_point = points_gdf.iloc[i + 1].geometry
+        dx = end_point.x - start_point.x
+        dy = end_point.y - start_point.y
+        theta = np.arctan2(dy, dx)
+        offset_x = point_size * np.cos(theta)
+        offset_y = point_size * np.sin(theta)
+        label = label if i == 0 else None
+        ax.arrow(
+            start_point.x,
+            start_point.y,
+            dx - offset_x,
+            dy - offset_y,
+            head_width=55,
+            length_includes_head=True,
+            ec="k",
+            fc=color,
+            label=label,
+        )
     return ax
