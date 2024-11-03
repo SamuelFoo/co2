@@ -5,10 +5,15 @@ import contextily as cx
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from geopandas.geodataframe import GeoDataFrame
 from matplotlib.axes import Axes
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import Normalize
+from matplotlib.dates import AutoDateLocator, DateFormatter
 from matplotlib.figure import Figure
 from matplotlib_scalebar.scalebar import ScaleBar
+from scipy.interpolate import griddata
 from shapely.geometry import box
 
 
@@ -43,6 +48,8 @@ class COMP_DOMAIN:
 class VIS_DOMAIN:
     min_lon, max_lon = 103.76, 103.775
     min_lat, max_lat = 1.303, 1.3225
+    x_bounds_32619 = (np.float64(1307587.3368352419), np.float64(1305900.3274759217))
+    y_bounds_32619 = (np.float64(19850748.35908098), np.float64(19848571.45448904))
 
 
 def get_map_axes(ax: Axes) -> Axes:
@@ -76,11 +83,7 @@ def plot_with_scale(
     return ax
 
 
-def get_vis_base_plot() -> Tuple[Figure, Axes]:
-    gdf: GeoDataFrame = gpd.read_file(
-        Path("gis/RoadSectionLine_Jul2024/RoadSectionLine.shp")
-    )
-    points_gdf: GeoDataFrame = gpd.read_file(Path("data/locations/locations.shp"))
+def crop_gdf_by_vis_domain(gdf: GeoDataFrame) -> GeoDataFrame:
     bbox = box(
         VIS_DOMAIN.min_lon, VIS_DOMAIN.min_lat, VIS_DOMAIN.max_lon, VIS_DOMAIN.max_lat
     )
@@ -89,12 +92,30 @@ def get_vis_base_plot() -> Tuple[Figure, Axes]:
     cropped_gdf = gpd.overlay(
         transformed_gdf, bbox_gdf, how="intersection", keep_geom_type=False
     )
+    return cropped_gdf
+
+
+def get_vis_base_plot() -> Tuple[Figure, Axes]:
+    gdf: GeoDataFrame = gpd.read_file(
+        Path("gis/RoadSectionLine_Jul2024/RoadSectionLine.shp")
+    )
+    points_gdf: GeoDataFrame = gpd.read_file(Path("data/locations/locations.shp"))
+    cropped_gdf = crop_gdf_by_vis_domain(gdf)
 
     fig, ax = plt.subplots()
     ax = plot_with_scale(
         ax, [points_gdf, cropped_gdf], [{"color": "red", "zorder": 3}, {"zorder": -1}]
     )
     return fig, ax
+
+
+def add_vis_base_map(ax: Axes) -> None:
+    cx.add_basemap(
+        ax,
+        crs="EPSG:32619",
+        source=cx.providers.OpenStreetMap.Mapnik,
+        zoom=16,
+    )
 
 
 def plot_route(
@@ -126,3 +147,57 @@ def plot_route(
             label=label,
         )
     return ax
+
+
+def get_traffic_count_axes(ax: Axes) -> Axes:
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Traffic Count")
+    date_format = DateFormatter("%H:%M")
+    ax.xaxis.set_major_formatter(date_format)
+    ax.xaxis.set_major_locator(AutoDateLocator())
+    ax.set_xlim(pd.Timestamp("1900-01-01 06:00"), pd.Timestamp("1900-01-01 21:00"))
+    ax.set_ylim(0, 1200)
+    plt.xticks(rotation=45)
+    return ax
+
+
+def plot_contour_with_map(
+    gdf: GeoDataFrame,
+    value_column_name: str,
+    interpolation_method: str = "linear",
+    map_true_range: bool = False,
+) -> None:
+    # Create grid data for contour plot
+    x = gdf.geometry.x
+    y = gdf.geometry.y
+    z = gdf[value_column_name]
+
+    # Define grid
+    xi = np.linspace(x.min(), x.max(), 500)
+    yi = np.linspace(y.min(), y.max(), 500)
+    xi, yi = np.meshgrid(xi, yi)
+
+    # Interpolate data
+    zi = griddata((x, y), z, (xi, yi), method=interpolation_method)
+
+    fig, ax = plt.subplots(figsize=(10, 10))
+    gdf_plot_kwargs = {
+        "zorder": 3,
+        "column": "interpolated_traffic",
+        "cmap": "hot",
+        "markersize": 50,
+    }
+    norm = Normalize(vmin=0, vmax=5000)
+    ax = plot_with_scale(ax, [gdf], [gdf_plot_kwargs])
+    contour = ax.contourf(
+        xi, yi, zi, levels=14, cmap="hot", zorder=4, alpha=0.8, norm=norm
+    )
+    if map_true_range:
+        fig.colorbar(contour, ax=ax, shrink=0.8)
+    else:
+        fig.colorbar(
+            mappable=ScalarMappable(norm=contour.norm, cmap=contour.cmap),
+            ax=ax,
+            shrink=0.8,
+        )
+    return fig, ax

@@ -171,3 +171,47 @@ def get_corrected_data() -> pd.DataFrame:
         df_corrected["co2_mean"][df["pi"] == "PI4"]
     )
     return df
+
+
+def get_corrected_co2_lat_long() -> pd.DataFrame:
+    co2_df = get_corrected_data()
+
+    co2_columns = ["date", "time", "co2_mean", "co2_std"]
+    co2_df = co2_df[co2_columns]
+
+    co2_df["datetime"] = pd.to_datetime(co2_df["time"], format="%H%M")
+
+    locations_df = pd.read_csv("data/locations/locations.csv")
+    processed_columns = ["date", "time", "co2_mean", "co2_std", "Latitude", "Longitude"]
+    processed_df = pd.DataFrame(columns=processed_columns)
+
+    for date in co2_df["date"].unique():
+        routes_df = pd.read_csv(f"data/routes/{date}/route.csv", dtype={"Time": str})
+        routes_df["datetime"] = pd.to_datetime(routes_df["Time"], format="%H%M")
+
+        on_date = co2_df["date"] == date
+        co2_df_on_date: pd.Series = co2_df[on_date]
+
+        merged_df = pd.merge_asof(
+            co2_df_on_date.sort_values("datetime"),
+            routes_df.sort_values("datetime"),
+            on="datetime",
+            direction="nearest",
+            tolerance=pd.Timedelta("1 minute"),
+        )
+
+        merged_df = pd.merge_asof(
+            merged_df.sort_values("Location"),
+            locations_df.sort_values("Location"),
+            on="Location",
+            direction="nearest",
+        )
+
+        merged_df = merged_df[processed_columns]
+        processed_df = (
+            merged_df.copy()
+            if processed_df.empty
+            else pd.concat([processed_df, merged_df])
+        )
+
+    return processed_df
