@@ -126,6 +126,7 @@ def plot_route(
     label=None,
 ) -> Axes:
     """Plot paths or arrows between points"""
+    points_gdf = points_gdf.to_crs(32619)
     for i in range(len(points_gdf) - 1):
         start_point = points_gdf.iloc[i].geometry
         end_point = points_gdf.iloc[i + 1].geometry
