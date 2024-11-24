@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 from geopandas import GeoDataFrame
 from scipy.spatial.distance import cdist
+from shapely.geometry import Point
 
 
 def get_traffic_df_from_gdf(traffic_gdf: GeoDataFrame, site_id: str):
@@ -109,6 +110,41 @@ def get_traffic_count_score(
     diffusion = k * 1 / (a + dists) ** n + b
     traffic_score = diffusion @ z
     return xi, yi, traffic_score
+
+
+def get_traffic_count_score_for_reading(
+    time: str,
+    point: Point,
+    traffic_gdf: GeoDataFrame,
+    data_dict: dict[str, pd.Series],
+    n: float = 1.0,
+    k: float = 1.0,
+    b: float = 0.0,
+    a: float = 41.11750641592207,
+):
+    # round time to nearest 15 minutes
+    timestamp = pd.to_datetime(time, format="%H%M")
+    timestamp = timestamp.round("15min")
+
+    traffic_gdf["interpolated_traffic"] = traffic_gdf["SiteID"].apply(
+        lambda site_id: data_dict.get(site_id, pd.DataFrame())
+        .get("traffic", pd.Series())
+        .get(timestamp, 0)
+    )
+    transformed_gdf = traffic_gdf.to_crs("EPSG:32619")
+
+    x: np.ndarray = transformed_gdf.geometry.x
+    y: np.ndarray = transformed_gdf.geometry.y
+    traffic_count_pts = np.vstack([x, y]).T
+
+    data_point = np.array([[point.x, point.y]])
+    dists = cdist(data_point, traffic_count_pts, "euclidean")
+    z = transformed_gdf["interpolated_traffic"].values
+
+    diffusion = k * 1 / (a + dists) ** n
+    traffic_score = diffusion @ z + b
+
+    return traffic_score
 
 
 def get_traffic_counts_by_time(

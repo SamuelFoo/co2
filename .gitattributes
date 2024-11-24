@@ -1,3 +1,5 @@
 # Track data files with Git LFS
 gis/** filter=lfs diff=lfs merge=lfs -text
 data/** filter=lfs diff=lfs merge=lfs -text
+co2_readings.db filter=lfs diff=lfs merge=lfs -text
+model_correlation.p filter=lfs diff=lfs merge=lfs -text
